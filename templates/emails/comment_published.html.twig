@@ -1,0 +1,9 @@
+{% extends '@email/default/notification/body.html.twig' %}
+
+{% block content %}
+    Hello {{ comment.author }}, your comment have been approved !<br />
+
+    <p>
+        {{ comment.text }}
+    </p>
+{% endblock %}

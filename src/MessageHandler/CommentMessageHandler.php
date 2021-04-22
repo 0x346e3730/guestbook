@@ -4,6 +4,7 @@ namespace App\MessageHandler;
 
 use App\Message\CommentMessage;
 use App\Repository\CommentRepository;
+use App\Service\ImageOptimizer;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bridge\Twig\Mime\NotificationEmail;
@@ -18,18 +19,22 @@ class CommentMessageHandler implements MessageHandlerInterface
 	private $commentRepository;
 	private $bus;
 	private $workflow;
-	private $adminEmail;
 	private $mailer;
+	private $imageOptimizer;
+	private $adminEmail;
+	private $photoDir;
 	private $logger;
 
-	public function __construct(EntityManagerInterface $entityManager, CommentRepository $commentRepository, MessageBusInterface $bus, WorkflowInterface $commentStateMachine, MailerInterface $mailer, string $adminEmail, LoggerInterface $logger = null)
+	public function __construct(EntityManagerInterface $entityManager, CommentRepository $commentRepository, MessageBusInterface $bus, WorkflowInterface $commentStateMachine, MailerInterface $mailer, ImageOptimizer $imageOptimizer, string $adminEmail, string $photoDir, LoggerInterface $logger = null)
 	{
 		$this->entityManager = $entityManager;
 		$this->commentRepository = $commentRepository;
 		$this->bus = $bus;
 		$this->workflow = $commentStateMachine;
 		$this->mailer = $mailer;
+		$this->imageOptimizer = $imageOptimizer;
 		$this->adminEmail = $adminEmail;
+		$this->photoDir = $photoDir;
 		$this->logger = $logger;
 	}
 
@@ -60,6 +65,12 @@ class CommentMessageHandler implements MessageHandlerInterface
 				->to($this->adminEmail)
 				->context(['comment' => $comment])
 			);
+		} elseif ($this->workflow->can($comment, 'optimize')) {
+			if ($comment->getPhotoFilename()) {
+				$this->imageOptimizer->resize($this->photoDir . '/' . $comment->getPhotoFilename());
+			}
+			$this->workflow->apply($comment, 'optimize');
+			$this->entityManager->flush();
 		} elseif ($this->logger) {
 			$this->logger->debug('Dropping comment message', ['comment' => $comment->getId(), 'state' => $comment->getState()]);
 		}
